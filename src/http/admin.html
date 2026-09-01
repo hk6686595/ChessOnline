@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>对战平台 · 数据管理</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #1b2438; --border: #2a3550; --text: #e6ecf5;
+    --dim: #8b98b5; --accent: #4f8cff; --gold: #ffd54a; --ok: #37d67a; --err: #ff5d5d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .card .num { font-size: 26px; font-weight: 800; color: var(--accent); }
+  .card .lbl { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .toolbar input { background: #202a44; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 14px; outline: none; }
+  .toolbar input:focus { border-color: var(--accent); }
+  button { background: #26335a; border: 1px solid #3a4a78; color: var(--text); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #32426f; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:disabled:hover { background: #26335a; }
+  button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  button.del { background: #4a2330; border-color: #7a3a4a; }
+  button.del:hover { background: #6a3040; }
+  button.del:disabled:hover { background: #4a2330; }
+  .chk { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  th.col-chk, td.col-chk { width: 36px; text-align: center; padding-left: 10px; padding-right: 4px; }
+  tr.picked td { background: #243056; }
+  #msg { font-size: 13px; }
+  #msg.ok { color: var(--ok); }
+  #msg.err { color: var(--err); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tabs button.active { background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border); }
+  th { background: #202a44; color: var(--dim); font-size: 12px; white-space: nowrap; }
+  tr:hover td { background: #202a44; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--dim); }
+  .tag.guest { color: var(--gold); border-color: var(--gold); }
+  .tag.reg { color: var(--ok); border-color: var(--ok); }
+  .rating { color: var(--gold); font-weight: 700; }
+  .win { color: var(--ok); font-weight: 700; }
+  .lose { color: var(--err); font-weight: 700; }
+  .draw { color: var(--dim); }
+  .pager { display: flex; gap: 8px; margin-top: 14px; align-items: center; justify-content: center; }
+  .pager span { color: var(--dim); font-size: 13px; }
+  .empty { text-align: center; color: var(--dim); padding: 40px; }
+  .dbpath { color: var(--dim); font-size: 12px; margin-top: 20px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚔️ 对战平台 · 数据管理</h1>
+  <div class="sub">SQLite 数据库（<span id="dbPath">…</span>）· 用户与对局数据实时查看</div>
+
+  <div class="cards">
+    <div class="card"><div class="num" id="cUsers">-</div><div class="lbl">注册用户</div></div>
+    <div class="card"><div class="num" id="cGuests" style="color:var(--gold)">-</div><div class="lbl">游客账号</div></div>
+    <div class="card"><div class="num" id="cOnline" style="color:var(--ok)">-</div><div class="lbl">当前在线</div></div>
+    <div class="card"><div class="num" id="cMatches">-</div><div class="lbl">历史对局</div></div>
+  </div>
+
+  <div class="tabs">
+    <button id="tabUsers" class="active">👤 用户</button>
+    <button id="tabMatches">♟️ 对局</button>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="按昵称搜索用户…" style="flex:1; max-width:320px;">
+    <button id="btnRefresh">🔄 刷新</button>
+    <button id="btnCreateUser">＋ 创建用户</button>
+    <button id="btnBatchDelete" class="del" disabled>🗑 删除所选</button>
+    <button id="btnExport" class="primary">⬇ 导出 CSV</button>
+    <span id="totalInfo" style="color:var(--dim); font-size:13px;"></span>
+    <span id="msg"></span>
+  </div>
+
+  <div id="createForm" style="display:none; background:var(--panel); border:1px solid var(--accent); border-radius:10px; padding:12px 16px; margin-bottom:12px; gap:10px; align-items:center; flex-wrap:wrap;">
+    <span style="color:var(--dim); font-size:13px;">创建正式用户：</span>
+    <input id="newName" type="text" placeholder="昵称（2-16 位中文/字母/数字/下划线/连字符）" style="flex:1; min-width:220px;">
+    <input id="newPass" type="password" placeholder="密码（4-64 位）" style="flex:1; min-width:180px;">
+    <button id="btnCreateConfirm" class="primary">确认创建</button>
+    <button id="btnCreateCancel">取消</button>
+  </div>
+
+  <div id="usersView">
+    <table>
+      <thead><tr>
+        <th class="col-chk"><input id="chkAll" class="chk" type="checkbox" title="全选本页"></th>
+        <th>ID</th><th>昵称</th><th>类型</th><th>积分</th><th>胜</th><th>负</th><th>平</th>
+        <th>注册时间</th><th>最后在线</th><th>操作</th>
+      </tr></thead>
+      <tbody id="userRows"></tbody>
+    </table>
+  </div>
+
+  <div id="matchesView" style="display:none;">
+    <table>
+      <thead><tr>
+        <th>ID</th><th>时间</th><th>游戏</th><th>先手</th><th>后手</th><th>结果</th><th>步数</th><th>原因</th>
+      </tr></thead>
+      <tbody id="matchRows"></tbody>
+    </table>
+  </div>
+
+  <div class="pager">
+    <button id="btnPrev">‹ 上一页</button>
+    <span id="pageInfo">-</span>
+    <button id="btnNext">下一页 ›</button>
+  </div>
+
+  <div class="dbpath">提示：也可用 <code>node -e "..."</code> 直接查询 <code>data/platform.db</code>，或用 REST：<code>/api/leaderboard</code>、<code>/api/matches?user=&lt;id&gt;</code>、<code>/api/users/me</code></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let view = 'users', page = 1, pageSize = 20, search = '';
+
+function fmt(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadStats() {
+  try {
+    const s = await fetch('/api/admin/stats').then(r => r.json());
+    $('cUsers').textContent = s.registeredUsers;
+    $('cGuests').textContent = s.guestUsers;
+    $('cOnline').textContent = s.onlineUsers;
+    $('cMatches').textContent = s.totalMatches;
+    $('dbPath').textContent = s.dbFile;
+  } catch {}
+}
+
+async function loadList() {
+  const qs = `page=${page}&pageSize=${pageSize}${view === 'users' && search ? '&search=' + encodeURIComponent(search) : ''}`;
+  const url = view === 'users' ? '/api/admin/users?' + qs : '/api/admin/matches?' + qs;
+  try {
+    const data = await fetch(url).then(r => r.json());
+    $('totalInfo').textContent = `共 ${data.total} 条`;
+    const pages = Math.max(1, Math.ceil(data.total / pageSize));
+    $('pageInfo').textContent = `第 ${data.page} / ${pages} 页`;
+    if (view === 'users') {
+      $('userRows').innerHTML = data.users.length === 0
+        ? '<tr><td colspan="11" class="empty">暂无数据</td></tr>'
+        : data.users.map(u => `<tr>
+            <td class="col-chk"><input class="chk row-chk" type="checkbox" data-id="${u.id}" data-name="${esc(u.name)}"></td>
+            <td>${u.id}</td>
+            <td><b>${esc(u.name)}</b></td>
+            <td><span class="tag ${u.isGuest ? 'guest' : 'reg'}">${u.isGuest ? '游客' : '正式'}</span></td>
+            <td class="rating">${u.rating}</td>
+            <td class="win">${u.wins}</td>
+            <td class="lose">${u.losses}</td>
+            <td class="draw">${u.draws}</td>
+            <td>${fmt(u.createdAt)}</td>
+            <td>${fmt(u.lastSeen)}</td>
+            <td><button class="del" data-id="${u.id}" data-name="${esc(u.name)}">删除</button></td>
+          </tr>`).join('');
+      syncSelectionUi();
+    } else {
+      $('matchRows').innerHTML = data.matches.length === 0
+        ? '<tr><td colspan="8" class="empty">暂无对局</td></tr>'
+        : data.matches.map(m => {
+            const [red, black] = m.players;
+            const result = m.isDraw ? '<span class="draw">平局</span>'
+              : `<span class="${m.winnerId === red?.id ? 'win' : 'lose'}">${m.winnerId === red?.id ? (red?.name ?? '红') + ' 胜' : (black?.name ?? '黑') + ' 胜'}</span>`;
+            return `<tr>
+              <td>${m.id}</td>
+              <td>${fmt(m.ts)}</td>
+              <td>${esc(m.gameType === 'gomoku' ? '五子棋' : '中国象棋')}</td>
+              <td>${esc(red?.name ?? '-')}</td>
+              <td>${esc(black?.name ?? '-')}</td>
+              <td>${result}</td>
+              <td>${m.moveCount}</td>
+              <td>${esc(m.reason ?? '')}</td>
+            </tr>`;
+          }).join('');
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function reload() { loadStats(); loadList(); }
+
+// 搜索防抖
+let debounce = null;
+$('search').addEventListener('input', e => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => { search = e.target.value.trim(); page = 1; loadList(); }, 300);
+});
+
+$('tabUsers').onclick = () => {
+  view = 'users'; page = 1;
+  $('tabUsers').classList.add('active'); $('tabMatches').classList.remove('active');
+  $('usersView').style.display = ''; $('matchesView').style.display = 'none';
+  $('btnCreateUser').style.display = ''; $('btnBatchDelete').style.display = '';
+  reload();
+};
+$('tabMatches').onclick = () => {
+  view = 'matches'; page = 1;
+  $('tabMatches').classList.add('active'); $('tabUsers').classList.remove('active');
+  $('matchesView').style.display = ''; $('usersView').style.display = 'none';
+  $('btnCreateUser').style.display = 'none'; $('btnBatchDelete').style.display = 'none';
+  $('createForm').style.display = 'none';
+  reload();
+};
+$('btnRefresh').onclick = reload;
+
+// ---- 操作提示 ----
+let msgTimer = null;
+function showMsg(text, kind) {
+  const el = $('msg');
+  el.textContent = text;
+  el.className = kind || '';
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => { el.textContent = ''; }, 4000);
+}
+
+// ---- 创建用户 ----
+$('btnCreateUser').onclick = () => {
+  const f = $('createForm');
+  f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+  if (f.style.display === 'flex') $('newName').focus();
+};
+$('btnCreateCancel').onclick = () => { $('createForm').style.display = 'none'; };
+$('btnCreateConfirm').onclick = async () => {
+  const name = $('newName').value.trim();
+  const pass = $('newPass').value;
+  if (!name || !pass) { showMsg('请填写昵称和密码', 'err'); return; }
+  try {
+    const r = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password: pass }),
+    }).then((x) => x.json());
+    if (r.ok) {
+      showMsg(`已创建用户「${r.user.name}」`, 'ok');
+      $('newName').value = '';
+      $('newPass').value = '';
+      $('createForm').style.display = 'none';
+      page = 1;
+      reload();
+    } else {
+      showMsg('创建失败：' + (r.message || '未知错误'), 'err');
+    }
+  } catch { showMsg('创建失败：网络错误', 'err'); }
+};
+
+// ---- 多选 ----
+function selectedUsers() {
+  return [...$('userRows').querySelectorAll('input.row-chk:checked')].map((el) => ({
+    id: el.dataset.id,
+    name: el.dataset.name,
+  }));
+}
+function syncSelectionUi() {
+  const boxes = [...$('userRows').querySelectorAll('input.row-chk')];
+  const checked = boxes.filter((el) => el.checked);
+  const all = $('chkAll');
+  all.checked = boxes.length > 0 && checked.length === boxes.length;
+  all.indeterminate = checked.length > 0 && checked.length < boxes.length;
+  $('btnBatchDelete').disabled = checked.length === 0;
+  $('btnBatchDelete').textContent = checked.length ? `🗑 删除所选（${checked.length}）` : '🗑 删除所选';
+  boxes.forEach((el) => el.closest('tr')?.classList.toggle('picked', el.checked));
+}
+$('chkAll').addEventListener('change', () => {
+  const on = $('chkAll').checked;
+  $('userRows').querySelectorAll('input.row-chk').forEach((el) => { el.checked = on; });
+  syncSelectionUi();
+});
+$('userRows').addEventListener('change', (e) => {
+  if (e.target.classList.contains('row-chk')) syncSelectionUi();
+});
+$('userRows').addEventListener('click', (e) => {
+  if (e.target.closest('button, input')) return;
+  const chk = e.target.closest('tr')?.querySelector('input.row-chk');
+  if (!chk) return;
+  chk.checked = !chk.checked;
+  syncSelectionUi();
+});
+
+async function deleteUsersByIds(users) {
+  if (!users.length) return;
+  const names = users.map((u) => u.name);
+  const preview = names.length <= 8 ? names.map((n) => `「${n}」`).join('、') : names.slice(0, 8).map((n) => `「${n}」`).join('、') + ` 等 ${names.length} 人`;
+  if (!confirm(`确定删除 ${users.length} 个用户？\n${preview}\n删除后这些账号无法再登录，历史对局记录会保留。`)) return;
+  try {
+    const r = await fetch('/api/admin/users', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: users.map((u) => u.id) }),
+    }).then((x) => x.json());
+    if (r.ok) {
+      const n = r.deleted?.length ?? users.length;
+      showMsg(`已删除 ${n} 个用户`, 'ok');
+      $('chkAll').checked = false;
+      reload();
+    } else {
+      showMsg('删除失败：' + (r.message || '未知错误'), 'err');
+    }
+  } catch { showMsg('删除失败：网络错误', 'err'); }
+}
+
+$('btnBatchDelete').onclick = () => deleteUsersByIds(selectedUsers());
+
+// ---- 删除用户（事件委托）----
+$('userRows').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button.del');
+  if (!btn) return;
+  await deleteUsersByIds([{ id: btn.dataset.id, name: btn.dataset.name }]);
+});
+$('btnPrev').onclick = () => { if (page > 1) { page--; loadList(); } };
+$('btnNext').onclick = () => { page++; loadList(); };
+$('btnExport').onclick = () => {
+  const url = view === 'users' ? '/api/admin/users?pageSize=100000' : '/api/admin/matches?pageSize=100000';
+  fetch(url).then(r => r.json()).then(data => {
+    let csv;
+    if (view === 'users') {
+      csv = 'ID,昵称,类型,积分,胜,负,平,注册时间,最后在线\n' + data.users.map(u =>
+        [u.id, u.name, u.isGuest ? '游客' : '正式', u.rating, u.wins, u.losses, u.draws, fmt(u.createdAt), fmt(u.lastSeen)].join(',')).join('\n');
+    } else {
+      csv = 'ID,时间,游戏,红/黑方,白/黑方,结果,步数,原因\n' + data.matches.map(m => {
+        const [red, black] = m.players;
+        const game = m.gameType === 'gomoku' ? '五子棋' : '中国象棋';
+        const res = m.isDraw ? '平局' : (m.winnerId === red?.id ? (red?.name ?? '红') + ' 胜' : (black?.name ?? '黑') + ' 胜');
+        return [m.id, fmt(m.ts), game, red?.name ?? '', black?.name ?? '', res, m.moveCount, m.reason ?? ''].join(',');
+      }).join('\n');
+    }
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = view === 'users' ? 'users.csv' : 'matches.csv';
+    a.click();
+  });
+};
+
+reload();
+setInterval(loadStats, 5000); // 在线数每 5 秒自动刷新
+</script>
+</body>
+</html>

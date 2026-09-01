@@ -1,0 +1,3 @@
+# 复制为 cpolar.yml 后填入 token，或运行：
+#   cpolar\cpolar.exe authtoken <你的token> -config cpolar\cpolar.yml
+authtoken: <在此填入你的 cpolar authtoken>

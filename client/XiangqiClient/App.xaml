@@ -1,0 +1,365 @@
+<Application x:Class="XiangqiClient.App"
+              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:conv="clr-namespace:XiangqiClient.Converters"
+              xmlns:models="clr-namespace:XiangqiClient.Models"
+              xmlns:ctl="clr-namespace:XiangqiClient.Controls"
+              StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <conv:OwnerConverter x:Key="OwnerConverter"/>
+        <conv:ReadyConverter x:Key="ReadyConverter"/>
+        <conv:BoolToVisConverter x:Key="BoolToVisConverter"/>
+        <conv:BoolToAlignConverter x:Key="ChatAlignConverter"/>
+        <conv:IntToBoolConverter x:Key="IntToBoolConverter"/>
+        <conv:IntToVisConverter x:Key="IntToVisConverter"/>
+
+        <!-- 聊天消息模板（扁平，大厅 / 房间共用）：去掉气泡背景与头像圆点，纯文本行、顶部对齐 -->
+        <DataTemplate x:Key="ChatBubbleTemplate" DataType="{x:Type models:ChatMessage}">
+            <StackPanel Margin="0,4" VerticalAlignment="Top">
+                <!-- 系统消息：居中灰字 -->
+                <TextBlock Text="{Binding Display}" Foreground="#8b98b5" FontSize="12"
+                           HorizontalAlignment="Center" TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSystem}" Value="False">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <!-- 普通消息：扁平文本行（发送者 · 时间 + 内容） -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSystem}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                        <TextBlock Text="{Binding From}" Foreground="#b9c8ea" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Text=" · " Foreground="#7d8db5" FontSize="11"/>
+                        <TextBlock Text="{Binding TimeText}" Foreground="#7d8db5" FontSize="10"/>
+                    </StackPanel>
+                    <ctl:EmojiTextBlock Text="{Binding Text}" Foreground="#e6ecf5" FontSize="13"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <Style x:Key="InputBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#2a3550"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="InputBoxPass" TargetType="PasswordBox">
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#2a3550"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <!-- 下拉框（对局设置等）：完整自定义模板的深色主题。
+             默认 Aero2 模板会忽略 Background（内部 ToggleButton 自带浅色外观），
+         仅设前景色会出现"白字白底"，因此整体重模板：深色框 + 深色下拉列表。 -->
+        <Style x:Key="Combo" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="BorderBrush" Value="#3a4a78"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MaxDropDownHeight" Value="220"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- 框体（含下拉箭头） -->
+                            <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Bd" CornerRadius="6"
+                                                Background="{Binding Background, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                BorderBrush="{Binding BorderBrush, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                BorderThickness="{Binding BorderThickness, RelativeSource={RelativeSource AncestorType=ComboBox}}">
+                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
+                                                  Data="M0,0 L4,4 8,0" Stroke="#8b98b5" StrokeThickness="1.6"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#28345a"/>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#2c3a63"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <!-- 选中项文本 -->
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                                              IsHitTestVisible="False"/>
+                            <!-- 下拉列表 -->
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False"
+                                   Placement="Bottom" PopupAnimation="None" AllowsTransparency="True">
+                                <Border Background="#1b2438" BorderBrush="#3a4a78" BorderThickness="1" CornerRadius="6"
+                                        Margin="0,4,0,0" MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="#e6ecf5"/>
+                        <Setter Property="Padding" Value="10,7"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#32426f"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 登录昵称历史下拉：可编辑的深色 ComboBox（含 PART_EditableTextBox） -->
+        <Style x:Key="InputCombo" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="BorderBrush" Value="#2a3550"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="MaxDropDownHeight" Value="220"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Border x:Name="Bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <Grid>
+                                <TextBox x:Name="PART_EditableTextBox" Margin="{TemplateBinding Padding}"
+                                         Background="Transparent" Foreground="{TemplateBinding Foreground}"
+                                         BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                                <ContentPresenter x:Name="PART_ContentSite" Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  Margin="{TemplateBinding Padding}" HorizontalAlignment="Left"
+                                                  VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed"/>
+                                <ToggleButton x:Name="Toggle" Width="22" HorizontalAlignment="Right"
+                                              Focusable="False" ClickMode="Press"
+                                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                              Background="Transparent" BorderThickness="0">
+                                    <Path HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Data="M0,0 L4,4 8,0" Stroke="#8b98b5" StrokeThickness="1.6"/>
+                                </ToggleButton>
+                                <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False"
+                                       Placement="Bottom" PopupAnimation="None" AllowsTransparency="True">
+                                    <Border Background="#1b2438" BorderBrush="#3a4a78" BorderThickness="1" CornerRadius="6"
+                                            Margin="0,4,0,0" MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_ContentSite" Property="Visibility" Value="Collapsed"/>
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEditable" Value="False">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Collapsed"/>
+                                <Setter TargetName="PART_ContentSite" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#3a4a78"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#4f8cff"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="#e6ecf5"/>
+                        <Setter Property="Padding" Value="10,7"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#32426f"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 按钮基础样式：完整自定义模板。默认 Aero2 模板悬浮时忽略 Background
+             （切换成系统浅色高亮），导致浅色文字不可读，因此重模板始终使用
+             各样式触发器设置的 Background。 -->
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Background" Value="#26335a"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#3a4a78"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- 按下反馈用透明度，避免与各样式触发器的悬浮背景色冲突 -->
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.82"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#32426f"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="#4f8cff"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#6ba0ff"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DangerBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="#7a2424"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#9a3030"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SmallBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- 聊天输入框：右底部固定、更大更醒目 -->
+        <Style x:Key="ChatInputBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#141a28"/>
+            <Setter Property="Foreground" Value="#e6ecf5"/>
+            <Setter Property="BorderBrush" Value="#3a4a78"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="MinHeight" Value="36"/>
+        </Style>
+
+        <!-- 标签切换 RadioButton 样式 -->
+        <Style x:Key="TabRadioStyle" TargetType="RadioButton">
+            <Setter Property="Background" Value="#202a44"/>
+            <Setter Property="Foreground" Value="#8b98b5"/>
+            <Setter Property="BorderBrush" Value="#3a4a78"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#28345a"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#4f8cff"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#4f8cff"/>
+                                <Setter Property="Foreground" Value="#ffffff"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Application.Resources>
+</Application>

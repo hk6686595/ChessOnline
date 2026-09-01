@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>XiangqiClient</RootNamespace>
+    <AssemblyName>象棋五子棋线对战平台</AssemblyName>
+    <ApplicationIcon>Assets\chessIcon.ico</ApplicationIcon>
+    <Version>2.0.0</Version>
+    <AssemblyTitle>象棋五子棋线对战平台</AssemblyTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\chessIcon.ico" />
+    <Resource Include="Assets\move.wav" />
+    <Resource Include="Assets\capture.wav" />
+    <Resource Include="Assets\select.wav" />
+    <Resource Include="Assets\check.wav" />
+    <Resource Include="Assets\mate.wav" />
+    <Resource Include="Assets\win.wav" />
+    <Resource Include="Assets\bgm.mp3" />
+    <Resource Include="Assets\Emoji\*.png" />
+  </ItemGroup>
+
+</Project>

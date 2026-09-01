@@ -1,0 +1,28 @@
+# 数据与依赖（自动生成）
+node_modules/
+dist/
+data/
+logs/
+
+# 日志
+*.log
+
+# Node
+package-lock.json.bak
+
+# .NET / Visual Studio 构建产物
+.vs/
+bin/
+obj/
+*.user
+*.suo
+
+# 临时目录
+tmpflip2/
+
+# cpolar 账号凭证（含 authtoken，不入库）
+cpolar/cpolar.yml
+
+# 系统杂项
+Thumbs.db
+.DS_Store

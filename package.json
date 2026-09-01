@@ -1,0 +1,27 @@
+{
+  "name": "battle-platform-server",
+  "version": "2.0.0",
+  "description": "联网对战游戏平台服务器：中国象棋 / 五子棋 + WPF 客户端",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "start:prod": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "tsx test/xiangqi.test.ts && tsx test/xiangqi-ai.test.ts && tsx test/eleeye.test.ts && tsx test/gomoku.test.ts && tsx test/room.test.ts && tsx test/e2e.test.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "license": "MIT"
+}
