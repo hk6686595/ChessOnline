@@ -1,12 +1,13 @@
 # gen-audio.ps1 - Generate client audio assets (re-runnable).
 #   Outputs (into client\XiangqiClient\Assets):
-#     move.wav      - wooden piece clack (Tiantian Xiangqi style, ORIGINAL)
+#     move.wav      - dry woodblock luozi (ORIGINAL, Tiantian-Xiangqi-like character)
 #     capture.wav   - heavier wood hit for captures
 #     select.wav    - light tick when picking a piece
 #     check.wav     - clack + short alert for check
 #     mate.wav      - gong slam for checkmate
 #     win.wav       - ascending pentatonic fanfare for the winner (ORIGINAL)
 #     bgm.wav       - warm Jiangnan-style plucked loop (ORIGINAL)
+# Voice clips (eat / check) are generated separately: tools\gen-voice.ps1
 # Drop your own bgm.mp3 / move.wav / capture.wav next to the exe to override.
 # IMPORTANT: keep this file ASCII-only so it parses correctly on any PowerShell.
 $ErrorActionPreference = 'Stop'
@@ -140,64 +141,93 @@ public static class AudioGen
             buf[buf.Length - 1 - i] *= (float)(i / (double)n);
     }
 
-    // Short bright wood clack (~90 ms), close to Tiantian Xiangqi "luozi".
+    // Dry woodblock-like luozi (ORIGINAL, not a commercial sample).
+    // Two micro-impacts + bright inharmonic wood modes, short tail.
+    private static void AddLuoziHit(float[] dst, double sr, double at, double amp, bool thud, int seed)
+    {
+        double[] freqs, decays, amps;
+        double noiseAmp, noiseDecay, hp;
+        if (thud)
+        {
+            freqs = new double[] { 210, 370, 620 };
+            decays = new double[] { 26, 34, 50 };
+            amps = new double[] { 0.72, 0.42, 0.18 };
+            noiseAmp = 0.32; noiseDecay = 95; hp = 160;
+        }
+        else
+        {
+            freqs = new double[] { 1640, 2380, 3120, 3980, 5480 };
+            decays = new double[] { 78, 95, 118, 150, 190 };
+            amps = new double[] { 0.34, 0.78, 0.42, 0.20, 0.09 };
+            noiseAmp = 0.82; noiseDecay = 240; hp = 1750;
+        }
+        int n = (int)Math.Ceiling(0.09 * sr);
+        float[] hit = new float[n];
+        Random rng = new Random(seed);
+        double prevX = 0, prevY = 0;
+        double rc = 1.0 / (2.0 * Math.PI * hp);
+        double dt = 1.0 / sr;
+        double ahp = rc / (rc + dt);
+        for (int i = 0; i < n; i++)
+        {
+            double t = i / sr;
+            double v = 0.0;
+            for (int k = 0; k < freqs.Length; k++)
+                v += amps[k] * Math.Sin(2.0 * Math.PI * freqs[k] * t) * Math.Exp(-t * decays[k]);
+            double x = (rng.NextDouble() * 2.0 - 1.0) * Math.Exp(-t * noiseDecay);
+            double y = ahp * (prevY + x - prevX);
+            prevX = x; prevY = y;
+            hit[i] = (float)((v + noiseAmp * y) * amp);
+        }
+        AddAt(dst, hit, at, sr);
+    }
+
+    private static float[] Luozi(double sr, bool capture)
+    {
+        float[] buf = new float[(int)((capture ? 0.125 : 0.080) * sr)];
+        AddLuoziHit(buf, sr, 0.0000, capture ? 1.00 : 0.96, false, 11);
+        AddLuoziHit(buf, sr, 0.0029, capture ? 0.52 : 0.40, false, 19);
+        if (capture)
+        {
+            AddLuoziHit(buf, sr, 0.0000, 0.58, true, 31);
+            AddLuoziHit(buf, sr, 0.0125, 0.68, false, 41);
+        }
+        Normalize(buf, capture ? 0.93f : 0.90f);
+        FadeOut(buf, sr, 0.008);
+        return buf;
+    }
+
+    // Short bright wood "da" (~80 ms), classic online-xiangqi luozi character.
     private static void GenMove(string path)
     {
         int sr = 44100;
-        float[] buf = WoodClack(sr, 0.10,
-            new double[] { 980, 1480, 2320, 3650 },
-            new double[] { 42, 55, 78, 110 },
-            new double[] { 0.55, 0.42, 0.22, 0.10 },
-            0.55, 140, 11);
-        Normalize(buf, 0.88f);
-        FadeOut(buf, sr, 0.008);
-        WriteWav(path, sr, buf);
+        WriteWav(path, sr, Luozi(sr, false));
     }
 
-    // Heavier board thud + clack (~180 ms).
+    // Same family plus a low knock (capture).
     private static void GenCapture(string path)
     {
         int sr = 44100;
-        float[] buf = new float[(int)(0.20 * sr)];
-        AddAt(buf, WoodClack(sr, 0.18,
-            new double[] { 190, 340, 780, 1240, 2100 },
-            new double[] { 22, 28, 48, 62, 90 },
-            new double[] { 0.70, 0.45, 0.28, 0.18, 0.08 },
-            0.62, 95, 23), 0.0, sr);
-        AddAt(buf, WoodClack(sr, 0.08,
-            new double[] { 1100, 1750 },
-            new double[] { 70, 95 },
-            new double[] { 0.25, 0.12 },
-            0.20, 160, 29), 0.012, sr);
-        Normalize(buf, 0.90f);
-        FadeOut(buf, sr, 0.016);
-        WriteWav(path, sr, buf);
+        WriteWav(path, sr, Luozi(sr, true));
     }
 
     // Light pickup tick.
     private static void GenSelect(string path)
     {
         int sr = 44100;
-        float[] buf = WoodClack(sr, 0.055,
-            new double[] { 1650, 2480, 3900 },
-            new double[] { 70, 95, 130 },
-            new double[] { 0.40, 0.28, 0.12 },
-            0.28, 180, 7);
-        Normalize(buf, 0.55f);
-        FadeOut(buf, sr, 0.006);
+        float[] buf = new float[(int)(0.048 * sr)];
+        AddLuoziHit(buf, sr, 0.0000, 0.55, false, 7);
+        Normalize(buf, 0.48f);
+        FadeOut(buf, sr, 0.005);
         WriteWav(path, sr, buf);
     }
 
-    // Clack plus two pentatonic pings (check warning).
+    // Luozi plus two pentatonic pings (check warning).
     private static void GenCheck(string path)
     {
         int sr = 44100;
         float[] buf = new float[(int)(0.42 * sr)];
-        AddAt(buf, WoodClack(sr, 0.10,
-            new double[] { 980, 1480, 2320 },
-            new double[] { 42, 55, 78 },
-            new double[] { 0.40, 0.30, 0.16 },
-            0.40, 140, 11), 0.0, sr);
+        AddAt(buf, Luozi(sr, false), 0.0, sr);
         AddAt(buf, Pluck(783.99, sr, 0.32, 0.55, 0.004), 0.04, sr);
         AddAt(buf, Pluck(1046.50, sr, 0.28, 0.40, 0.004), 0.09, sr);
         Normalize(buf, 0.82f);

@@ -21,6 +21,9 @@
     <Resource Include="Assets\check.wav" />
     <Resource Include="Assets\mate.wav" />
     <Resource Include="Assets\win.wav" />
+    <Resource Include="Assets\voice-eat.wav" />
+    <Resource Include="Assets\voice-check.wav" />
+    <Resource Include="Assets\voice-mate.wav" />
     <Resource Include="Assets\bgm.mp3" />
     <Resource Include="Assets\Emoji\*.png" />
   </ItemGroup>

@@ -12,7 +12,8 @@ namespace XiangqiClient.Services;
 ///
 /// 覆盖优先级（exe 同目录优先）：
 ///   BGM：bgm.mp3 → bgm.wav → 嵌入的录屏提取音频 / 占位曲
-///   音效：move.wav / capture.wav（或 eat.wav）/ check.wav / mate.wav / select.wav → 嵌入资源
+/// 音效：move.wav / capture.wav（或 eat.wav）/ check.wav / mate.wav / select.wav
+///        / voice-eat.wav（「吃」）/ voice-check.wav（「将军」）/ voice-mate.wav（「绝杀」）→ 嵌入资源
 /// </summary>
 public static class SoundService
 {
@@ -28,20 +29,43 @@ public static class SoundService
     private static bool _bgmOpening;
     private static bool _wantBgm;
 
+    private static MediaPlayer? _eatVoice;
+    private static MediaPlayer? _checkVoice;
+    private static MediaPlayer? _mateVoice;
+    private static bool _voicesInited;
+
     public static void PlayMove(bool capture)
     {
-        Play(capture ? CaptureSound ?? MoveSound : MoveSound);
+        PlayMove(capture, check: false);
+    }
+
+    /// <summary>落子：木击 + 可选语音「吃」「将军」。check 与 capture 可同时报。</summary>
+    public static void PlayMove(bool capture, bool check)
+    {
+        EnsureVoices();
+        if (check) Play(CheckSound ?? (capture ? CaptureSound : MoveSound) ?? MoveSound);
+        else Play(capture ? CaptureSound ?? MoveSound : MoveSound);
+
+        if (capture && check)
+        {
+            PlayVoice(_eatVoice);
+            PlayVoiceLater(_checkVoice, 200);
+        }
+        else if (check) PlayVoice(_checkVoice);
+        else if (capture) PlayVoice(_eatVoice);
     }
 
     public static void PlayCheck()
     {
-        Play(CheckSound ?? MoveSound);
+        PlayMove(false, check: true);
     }
 
-    /// <summary>象棋绝杀：锣鼓式重音，压过普通将军</summary>
-    public static void PlayMate()
+    /// <summary>象棋绝杀：落子木击 + 语音「绝杀」，不再使用锣鼓音效</summary>
+    public static void PlayMate(bool capture = false)
     {
-        Play(MateSound ?? CheckSound ?? MoveSound);
+        EnsureVoices();
+        Play(capture ? CaptureSound ?? MoveSound : MoveSound);
+        PlayVoice(_mateVoice ?? _checkVoice);
     }
 
     /// <summary>胜利：上行五声音阶号角（仅获胜方本人播放）</summary>
@@ -52,6 +76,7 @@ public static class SoundService
 
     public static void PlaySelect()
     {
+        EnsureVoices();
         Play(SelectSound);
     }
 
@@ -68,6 +93,7 @@ public static class SoundService
         _wantBgm = true;
         if (_bgmPlaying) return;
         EnsureBgm();
+        EnsureVoices();
         TryPlayBgm();
     }
 
@@ -99,6 +125,63 @@ public static class SoundService
             player.Play();
         }
         catch { /* 播放失败忽略 */ }
+    }
+
+    private static void EnsureVoices()
+    {
+        if (_voicesInited) return;
+        _voicesInited = true;
+        _eatVoice = OpenVoice("voice-eat.wav");
+        _checkVoice = OpenVoice("voice-check.wav");
+        _mateVoice = OpenVoice("voice-mate.wav");
+    }
+
+    private static MediaPlayer? OpenVoice(string name)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, name);
+            if (!File.Exists(path)) path = ExtractResourceToTemp(name) ?? "";
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            var mp = new MediaPlayer { Volume = 1.0 };
+            mp.Open(new Uri(path));
+            return mp;
+        }
+        catch { return null; }
+    }
+
+    private static void PlayVoice(MediaPlayer? mp)
+    {
+        if (mp == null) return;
+        var app = Application.Current;
+        if (app == null) return;
+        if (!app.Dispatcher.CheckAccess())
+        {
+            app.Dispatcher.BeginInvoke(() => PlayVoice(mp));
+            return;
+        }
+        try
+        {
+            mp.Stop();
+            mp.Position = TimeSpan.Zero;
+            mp.Play();
+        }
+        catch { /* 播放失败忽略 */ }
+    }
+
+    private static void PlayVoiceLater(MediaPlayer? mp, int delayMs)
+    {
+        if (mp == null) return;
+        var app = Application.Current;
+        if (app == null) return;
+        void start()
+        {
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(delayMs) };
+            t.Tick += (_, _) => { t.Stop(); PlayVoice(mp); };
+            t.Start();
+        }
+        if (app.Dispatcher.CheckAccess()) start();
+        else app.Dispatcher.BeginInvoke(start);
     }
 
     private static void EnsureBgm()

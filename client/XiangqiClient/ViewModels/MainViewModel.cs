@@ -649,26 +649,33 @@ public class MainViewModel : ViewModelBase
     /// <summary>
     /// 走子/吃子/将军音效：仅当步数恰好增加一步时触发，
     /// 开局、悔棋、重开、中途进房（步数跳变）等场景不响。
-    /// 最后一手（将死/五连）同样播放，避免胜利步静音。
+    /// 象棋落子音在棋盘滑行动画落地时播放；此处只处理五子棋。
     /// </summary>
     private static void PlayMoveSound(GameState? prev, GameState? next)
     {
         if (prev == null || next == null) return;
+        if (!string.Equals(next.Type, "gomoku", StringComparison.OrdinalIgnoreCase)) return;
         var addedMoves = next.Moves.Count - prev.Moves.Count;
         var addedCount = next.MoveCount - prev.MoveCount;
         if (addedMoves != 1 && addedCount != 1) return;
         var last = next.LastMove;
         var captured = last != null && GetPiece(prev, last.To) != null;
-        // 象棋绝杀（含吃将）用独立重音，不能跟普通将军混在一起
-        if (next.Over && !next.IsDraw && next.Type != "gomoku"
-            && (next.Reason?.Contains("绝杀") == true || next.Reason?.Contains("吃掉对方") == true))
+        SoundService.PlayMove(captured);
+    }
+
+    private static async Task PlayVictoryDelayedAsync(int delayMs)
+    {
+        if (delayMs > 0) await Task.Delay(delayMs);
+        var app = Application.Current;
+        if (app == null) return;
+        var d = app.Dispatcher;
+        if (d.HasShutdownStarted || d.HasShutdownFinished) return;
+        try
         {
-            SoundService.PlayMate();
-            return;
+            if (d.CheckAccess()) SoundService.PlayVictory();
+            else d.Invoke(SoundService.PlayVictory);
         }
-        var justChecked = !string.IsNullOrEmpty(next.Check) && next.Check != prev.Check;
-        if (justChecked) SoundService.PlayCheck();
-        else SoundService.PlayMove(captured);
+        catch (OperationCanceledException) { /* 退出时调度器已关闭 */ }
     }
 
     /// <summary>
@@ -846,14 +853,14 @@ public class MainViewModel : ViewModelBase
     // ---------------- 走法提示 ----------------
 
     private Move2? _hint;
-    /// <summary>服务端建议走法（棋盘金色虚线框高亮，任意新对局状态到达即清除）</summary>
+    /// <summary>服务端建议走法（棋盘蓝色四角框，任意新对局状态到达即清除）</summary>
     public Move2? Hint
     {
         get => _hint;
         set { if (Set(ref _hint, value)) OnPropertyChanged(nameof(HintText)); }
     }
 
-    public string HintText => Hint != null ? "💡 金色虚线框为建议走法" : "";
+    public string HintText => Hint != null ? "💡 蓝色四角框为建议走法" : "";
 
     private Point2? _selectedFrom;
     public Point2? SelectedFrom { get => _selectedFrom; set => Set(ref _selectedFrom, value); }
@@ -1457,6 +1464,11 @@ public class MainViewModel : ViewModelBase
         }
 
         game.MoveCount = ReplayIndex;
+        if (ReplayIndex > 0 && ReplayIndex <= ReplayMatch.Moves.Count)
+        {
+            var last = ReplayMatch.Moves[ReplayIndex - 1];
+            game.LastMove = new Move2 { From = last.From, To = last.To };
+        }
         ReplayGame = game;
     }
 
@@ -1726,12 +1738,18 @@ public class MainViewModel : ViewModelBase
                 UndoPromptVisible = false;
                 DrawPromptVisible = false;
                 RefreshMyMatches(); // 对局结束后刷新个人战绩
-                // 胜利音效：仅胜者本人播放（平局不播）
+                // 胜利音效：仅胜者本人播放（平局不播）；象棋等棋子滑行落地后再响
                 {
                     var wid = payload.TryGetProperty("winnerId", out var w) ? w.GetString() : null;
                     var draw = !payload.TryGetProperty("isDraw", out var d) || d.ValueKind == JsonValueKind.True;
                     if (!draw && wid != null && User != null && wid == User.Id)
-                        SoundService.PlayVictory();
+                    {
+                        var gomoku = string.Equals(Game?.Type, "gomoku", StringComparison.OrdinalIgnoreCase);
+                        var reason = payload.TryGetProperty("reason", out var rs) ? rs.GetString() ?? "" : "";
+                        var isMate = reason.Contains("绝杀") || reason.Contains("吃掉对方");
+                        var delayMs = gomoku ? 0 : (isMate ? 820 : 340);
+                        _ = PlayVictoryDelayedAsync(delayMs);
+                    }
                 }
                 break;
             case "s.undo.requested":

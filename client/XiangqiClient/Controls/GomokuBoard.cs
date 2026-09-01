@@ -54,6 +54,7 @@ public class GomokuBoard : UserControl
 
     private void OnMouseClick(object sender, MouseButtonEventArgs e)
     {
+        if (Game?.Board == null) return;
         var pos = e.GetPosition(_canvas);
         int cx = (int)Math.Round((pos.X - Pad) / Cell);
         int cy = (int)Math.Round((pos.Y - Pad) / Cell);
@@ -115,22 +116,56 @@ public class GomokuBoard : UserControl
             }
         }
 
-        // 最后落子标记（红点）
+        // 最后落子：棋子外红圈，比中心小红点更容易看见
         var last = Game?.LastMove;
         if (last != null)
         {
             var lx = last.To?.X ?? last.From?.X ?? 0;
             var ly = last.To?.Y ?? last.From?.Y ?? 0;
-            var mark = new Rectangle
+            var ring = new Ellipse
             {
-                Width = 8, Height = 8,
-                Fill = new SolidColorBrush(Color.FromRgb(0xE7, 0x4C, 0x3C)),
+                Width = StoneR * 2 + 6,
+                Height = StoneR * 2 + 6,
+                Stroke = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B)),
+                StrokeThickness = 2.2,
                 IsHitTestVisible = false,
             };
-            Canvas.SetLeft(mark, PX(lx) - 4);
-            Canvas.SetTop(mark, PY(ly) - 4);
-            _canvas.Children.Add(mark);
+            Canvas.SetLeft(ring, PX(lx) - ring.Width / 2);
+            Canvas.SetTop(ring, PY(ly) - ring.Height / 2);
+            _canvas.Children.Add(ring);
         }
+
+        if (Game?.Board == null)
+            DrawWaitingBanner();
+    }
+
+    private void DrawWaitingBanner()
+    {
+        const double w = 168;
+        const double h = 38;
+        var banner = new Border
+        {
+            Width = w,
+            Height = h,
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromArgb(220, 0x1B, 0x24, 0x38)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x5A, 0x3A, 0x14)),
+            BorderThickness = new Thickness(1.4),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = "等待开局",
+                FontSize = 18,
+                FontFamily = new FontFamily("楷体"),
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xFB, 0xF3, 0xDF)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        Canvas.SetLeft(banner, PX((Cols - 1) / 2.0) - w / 2);
+        Canvas.SetTop(banner, PY((Rows - 1) / 2.0) - h / 2);
+        _canvas.Children.Add(banner);
     }
 
     private void DrawStar(int x, int y)
